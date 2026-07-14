@@ -81,6 +81,12 @@ $script:toolCategories = [ordered]@{
         "TaskSchedulerView"     = "https://www.nirsoft.net/utils/taskschedulerview-x64.zip"
         "UninstallView"         = "https://www.nirsoft.net/utils/uninstallview-x64.zip"
         "USBDriveLog"           = "https://www.nirsoft.net/utils/usbdrivelog.zip"
+        "FullEventLogView"      = "https://www.nirsoft.net/utils/fulleventlogview.zip"
+        "ProduKey"              = "https://www.nirsoft.net/utils/produkey.zip"
+        "NetworkTrafficView"    = "https://www.nirsoft.net/utils/networktrafficview.zip"
+        "MyEventViewer"         = "https://www.nirsoft.net/utils/myeventviewer.zip"
+        "WifiInfoView"          = "https://www.nirsoft.net/utils/wifiinfoview.zip"
+        "IPNetInfo"             = "https://www.nirsoft.net/utils/ipnetinfo.zip"
     }
     "Spok's Tools" = [ordered]@{
         "JournalTrace"           = "https://github.com/spokwn/JournalTrace/releases/latest/download/JournalTrace.exe"
@@ -109,6 +115,25 @@ $script:toolCategories = [ordered]@{
         "Process Monitor"         = "https://download.sysinternals.com/files/ProcessMonitor.zip"
         "TCPView"                 = "https://download.sysinternals.com/files/TCPView.zip"
         "Hayabusa"                = "https://github.com/Yamato-Security/hayabusa/releases/download/v3.7.0/hayabusa-3.7.0-win-aarch64.zip"
+        "RAMMap"                  = "https://download.sysinternals.com/files/RAMMap.zip"
+        "VMMap"                   = "https://download.sysinternals.com/files/VMMap.zip"
+        "PSTools"                 = "https://download.sysinternals.com/files/PSTools.zip"
+        "SDelete"                 = "https://download.sysinternals.com/files/SDelete.zip"
+        "LogonSessions"           = "https://download.sysinternals.com/files/LogonSessions.zip"
+        "ListDLLs"                = "https://download.sysinternals.com/files/ListDlls.zip"
+        "WinObj"                  = "https://download.sysinternals.com/files/WinObj.zip"
+        "AccessChk"               = "https://download.sysinternals.com/files/AccessChk.zip"
+        "SigCheck"                = "https://download.sysinternals.com/files/Sigcheck.zip"
+        "Disk2vhd"                = "https://download.sysinternals.com/files/Disk2vhd.zip"
+    }
+    "Memory Forensics & Python" = [ordered]@{
+        "Volatility 3 v2.28.0 (source)"     = "https://github.com/volatilityfoundation/volatility3/archive/refs/tags/v2.28.0.zip"
+        "Volatility 2.6 (legacy standalone)" = "https://github.com/volatilityfoundation/volatility/releases/download/2.6/volatility_2.6_win64_standalone.zip"
+        "Magnet RAM Capture"                 = "https://s3.amazonaws.com/cdn.magnetforensics.com/Content/Files/MagnetRAMCapture/MagnetRAMCapture.exe"
+        "Python 3.14.6 (x64, ultima)"        = "https://www.python.org/ftp/python/3.14.6/python-3.14.6-amd64.exe"
+        "Python 3.13.14 (x64, LTS-friendly)" = "https://www.python.org/ftp/python/3.13.14/python-3.13.14-amd64.exe"
+        "YARA v4.5.5 (win64)"                = "https://github.com/VirusTotal/yara/releases/download/v4.5.5/yara-4.5.5-2368-win64.zip"
+        "ExifTool 13.59 (win64)"             = "https://downloads.sourceforge.net/project/exiftool/exiftool-13.59_64.zip"
     }
 }
 
@@ -219,8 +244,10 @@ $lblTitle.AutoSize = $true
 $lblTitle.Location = New-Object System.Drawing.Point(30, 14)
 $headerPanel.Controls.Add($lblTitle)
 
+$script:totalToolsCount = ($script:toolCategories.Values | ForEach-Object { $_.Count } | Measure-Object -Sum).Sum
+
 $lblSub = New-Object System.Windows.Forms.Label
-$lblSub.Text = "Made by Pieros  |  discord.gg/XVsgKxC4MX  |  destinazione: $script:folder"
+$lblSub.Text = "Made by Pieros  |  discord.gg/XVsgKxC4MX  |  $script:totalToolsCount tool disponibili  |  destinazione: $script:folder"
 $lblSub.Font = $fontSub
 $lblSub.ForeColor = $colorCyan
 $lblSub.AutoSize = $true
@@ -253,6 +280,7 @@ $sidebar.Controls.Add($lblCatHeader)
 $script:categoryButtons = @{}
 $catButtonY = 40
 foreach ($category in $script:toolCategories.Keys) {
+    $toolCount = $script:toolCategories[$category].Count
     $btn = New-Object System.Windows.Forms.Button
     $btn.Text = "  $category"
     $btn.Tag = $category
@@ -267,6 +295,20 @@ foreach ($category in $script:toolCategories.Keys) {
     $btn.Cursor = 'Hand'
     $btn.Add_Click({ Switch-Category -category $this.Tag })
     $sidebar.Controls.Add($btn)
+
+    $lblCatCount = New-Object System.Windows.Forms.Label
+    $lblCatCount.Text = "$toolCount"
+    $lblCatCount.Font = $fontSmall
+    $lblCatCount.ForeColor = $colorTextDim
+    $lblCatCount.AutoSize = $false
+    $lblCatCount.Size = New-Object System.Drawing.Size(36, 46)
+    $lblCatCount.Location = New-Object System.Drawing.Point(200, $catButtonY)
+    $lblCatCount.TextAlign = 'MiddleRight'
+    $lblCatCount.BackColor = [System.Drawing.Color]::Transparent
+    $lblCatCount.Enabled = $false
+    $sidebar.Controls.Add($lblCatCount)
+    $lblCatCount.BringToFront()
+
     $script:categoryButtons[$category] = $btn
     $catButtonY += 46
 }
