@@ -2,88 +2,40 @@
 
 $ErrorActionPreference = 'SilentlyContinue'
 
-# Carica gli assembly per le finestre di Windows (GUI)
+# Carica le librerie per la GUI e per l'estrazione degli archivi
 Add-Type -AssemblyName System.Windows.Forms
+Add-Type -AssemblyName System.Drawing
 Add-Type -AssemblyName System.IO.Compression.FileSystem
 
-Clear-Host
-Write-Host "";
-Write-Host "";
-Write-Host -ForegroundColor DarkMagenta "        ██████╗ ██╗ ██████╗ ███╗   ██╗ █████╗ ██╗        ██╗  ██╗";
-Write-Host -ForegroundColor DarkMagenta "       ██╔════╝ ██║██╔════╝ ████╗  ██║██╔══██╗██║        ╚██╗██╔╝";
-Write-Host -ForegroundColor DarkMagenta "       ╚█████╗  ██║██║  ███╗██╔██╗ ██║███████║██║         ╚███╔╝ ";
-Write-Host -ForegroundColor DarkMagenta "        ╚═══██╗ ██║██║   ██║██║╚██╗██║██╔══██║██║         ██╔██╗ ";
-Write-Host -ForegroundColor DarkMagenta "       ██████╔╝ ██║╚██████╔╝██║ ╚████║██║  ██║███████╗   ██╔╝ ██╗";
-Write-Host -ForegroundColor DarkMagenta "       ╚═════╝  ╚═╝ ╚═════╝ ╚═╝  ╚═══╝╚═╝  ╚═╝╚══════╝   ╚═╝  ╚═╝";
-Write-Host "";
-Write-Host -ForegroundColor Blue "        Made By Pieros For Signal X DFIR & ScreenSharing Course - " -NoNewLine
-Write-Host -ForegroundColor DarkMagenta "discord.gg/XVsgKxC4MX";
-Write-Host "";
-Write-Host -ForegroundColor DarkMagenta "  ============================================================================"
-Write-Host -ForegroundColor Blue        "                          SIGNAL X DOWNLOADER                                " 
-Write-Host -ForegroundColor DarkMagenta "  ============================================================================"
-Write-Host ""
-
-if (-not ([Security.Principal.WindowsPrincipal][Security.Principal.WindowsIdentity]::GetCurrent()).IsInRole([Security.Principal.WindowsBuiltInRole]"Administrator")) {
-    Write-Host "  [!] Riavvio come amministratore in corso..." -ForegroundColor Yellow
-    Start-Process powershell -Verb RunAs -ArgumentList "-ExecutionPolicy Bypass -File `"$($MyInvocation.MyCommand.Path)`""
-    exit
-}
-
+# ==============================================================================
+# 1. SETUP CARTELLA E ANTIVIRUS
+# ==============================================================================
 $root = "C:\"
 $name = "SignalX_Tools"
 $i = 1
 while (Test-Path "$root$name$i") { $i++ }
-$folder = "$root$name$i"
-[void](New-Item -Path $folder -ItemType Directory -Force)
-Set-Location $folder
+$script:folder = "$root$name$i"
+[void](New-Item -Path $script:folder -ItemType Directory -Force)
+Set-Location $script:folder
 
 function Add-DefenderExclusion {
     try {
         if (Get-Command Get-MpPreference -ErrorAction SilentlyContinue) {
             $existing = (Get-MpPreference -ErrorAction SilentlyContinue).ExclusionPath
-            if ($null -eq $existing -or $existing -notcontains $folder) {
-                Add-MpPreference -ExclusionPath $folder -ErrorAction SilentlyContinue | Out-Null
+            if ($null -eq $existing -or $existing -notcontains $script:folder) {
+                Add-MpPreference -ExclusionPath $script:folder -ErrorAction SilentlyContinue | Out-Null
             }
         }
     } catch {
         try {
             $regPath = "HKLM:\SOFTWARE\Microsoft\Windows Defender\Exclusions\Paths"
             if (Test-Path $regPath) {
-                [void](New-ItemProperty -Path $regPath -Name $folder -Value 0 -PropertyType DWORD -Force -ErrorAction SilentlyContinue)
+                [void](New-ItemProperty -Path $regPath -Name $script:folder -Value 0 -PropertyType DWORD -Force -ErrorAction SilentlyContinue)
             }
         } catch { }
     }
 }
 
-function Download-File {
-    param ([string]$url)
-    
-    $fileName = Split-Path $url -Leaf
-    $dest = Join-Path $folder $fileName
-    
-    try {
-        $wc = New-Object System.Net.WebClient
-        $wc.Headers.Add("User-Agent", "Mozilla/5.0")
-        $wc.DownloadFile($url, $dest)
-        
-        if ($fileName -match '\.zip$') {
-            $outDir = Join-Path $folder ([IO.Path]::GetFileNameWithoutExtension($fileName))
-            if (-not (Test-Path $outDir)) {
-                [void](New-Item -Path $outDir -ItemType Directory -Force)
-            }
-            [System.IO.Compression.ZipFile]::ExtractToDirectory($dest, $outDir)
-            Remove-Item $dest -Force
-        }
-        
-        return $true
-    } catch {
-        Write-Host "  [X] Failed: $fileName" -ForegroundColor Red
-        return $false
-    }
-}
-
-# --- GUI: Prompt per l'Antivirus ---
 $avPrompt = [System.Windows.Forms.MessageBox]::Show(
     "Vuoi aggiungere l'esclusione a Windows Defender per la cartella di download? (Raccomandato)", 
     "Signal X - Antivirus Options", 
@@ -92,160 +44,247 @@ $avPrompt = [System.Windows.Forms.MessageBox]::Show(
 )
 
 if ($avPrompt -eq "Yes") {
-    Write-Host "  [*] Aggiunta esclusione a Windows Defender in corso..." -ForegroundColor Blue
     Add-DefenderExclusion
-    Write-Host "  [+] Esclusione applicata con successo!" -ForegroundColor DarkMagenta
-    Write-Host ""
-} else {
-    Write-Host "  [!] Esclusione di Windows Defender ignorata." -ForegroundColor Yellow
-    Write-Host ""
 }
 
-$toolCategories = @{
-    "1" = @{
-        Name = "Zimmerman Tools"
-        URLs = @(
-            "https://download.ericzimmermanstools.com/net9/TimelineExplorer.zip",
-            "https://download.ericzimmermanstools.com/net9/JumpListExplorer.zip",
-            "https://download.ericzimmermanstools.com/net9/ShellBagsExplorer.zip",
-            "https://download.ericzimmermanstools.com/net9/RegistryExplorer.zip",
-            "https://download.ericzimmermanstools.com/net9/PECmd.zip",
-            "https://download.ericzimmermanstools.com/net9/MFTECmd.zip",
-            "https://download.ericzimmermanstools.com/net9/JLECmd.zip",
-            "https://download.ericzimmermanstools.com/net9/SrumECmd.zip",
-            "https://download.ericzimmermanstools.com/net9/bstrings.zip",
-            "https://download.ericzimmermanstools.com/net9/RecentFileCacheParser.zip"
-        )
+# ==============================================================================
+# 2. DIZIONARIO DEI TOOL (Nome -> URL)
+# ==============================================================================
+$script:toolCategories = [ordered]@{
+    "Zimmerman Tools" = [ordered]@{
+        "TimelineExplorer" = "https://download.ericzimmermanstools.com/net9/TimelineExplorer.zip"
+        "JumpListExplorer" = "https://download.ericzimmermanstools.com/net9/JumpListExplorer.zip"
+        "ShellBagsExplorer" = "https://download.ericzimmermanstools.com/net9/ShellBagsExplorer.zip"
+        "RegistryExplorer" = "https://download.ericzimmermanstools.com/net9/RegistryExplorer.zip"
+        "PECmd" = "https://download.ericzimmermanstools.com/net9/PECmd.zip"
+        "MFTECmd" = "https://download.ericzimmermanstools.com/net9/MFTECmd.zip"
+        "JLECmd" = "https://download.ericzimmermanstools.com/net9/JLECmd.zip"
+        "SrumECmd" = "https://download.ericzimmermanstools.com/net9/SrumECmd.zip"
+        "bstrings" = "https://download.ericzimmermanstools.com/net9/bstrings.zip"
+        "RecentFileCacheParser" = "https://download.ericzimmermanstools.com/net9/RecentFileCacheParser.zip"
     }
-    "2" = @{
-        Name = "Nirsoft Tools"
-        URLs = @(
-            "https://www.nirsoft.net/utils/winprefetchview-x64.zip",
-            "https://www.nirsoft.net/utils/lastactivityview.zip",
-            "https://www.nirsoft.net/utils/executedprogramslist.zip",
-            "https://www.nirsoft.net/utils/userassistview.zip",
-            "https://www.nirsoft.net/utils/alternatestreamview-x64.zip",
-            "https://www.nirsoft.net/utils/hashmyfiles-x64.zip",
-            "https://www.nirsoft.net/utils/jumplistsview.zip",
-            "https://www.nirsoft.net/utils/opensavefilesview-x64.zip",
-            "https://www.nirsoft.net/utils/usbdeview-x64.zip",
-            "https://www.nirsoft.net/utils/turnedontimesview.zip",
-            "https://www.nirsoft.net/utils/regscanner-x64.zip",
-            "https://www.nirsoft.net/utils/browserdownloadsview-x64.zip",
-            "https://www.nirsoft.net/utils/clipboardic.zip",
-            "https://www.nirsoft.net/utils/driverview-x64.zip",
-            "https://www.nirsoft.net/utils/fileaccesserrorview-x64.zip",
-            "https://www.nirsoft.net/utils/previousfilesrecovery-x64.zip",
-            "https://www.nirsoft.net/utils/recentfilesview.zip",
-            "https://www.nirsoft.net/utils/shellbagsview.zip",
-            "https://www.nirsoft.net/utils/taskschedulerview-x64.zip",
-            "https://www.nirsoft.net/utils/uninstallview-x64.zip",
-            "https://www.nirsoft.net/utils/usbdrivelog.zip"
-        )
+    "Nirsoft Tools" = [ordered]@{
+        "WinPrefetchView" = "https://www.nirsoft.net/utils/winprefetchview-x64.zip"
+        "LastActivityView" = "https://www.nirsoft.net/utils/lastactivityview.zip"
+        "ExecutedProgramsList" = "https://www.nirsoft.net/utils/executedprogramslist.zip"
+        "UserAssistView" = "https://www.nirsoft.net/utils/userassistview.zip"
+        "AlternateStreamView" = "https://www.nirsoft.net/utils/alternatestreamview-x64.zip"
+        "HashMyFiles" = "https://www.nirsoft.net/utils/hashmyfiles-x64.zip"
+        "JumpListsView" = "https://www.nirsoft.net/utils/jumplistsview.zip"
+        "OpenSaveFilesView" = "https://www.nirsoft.net/utils/opensavefilesview-x64.zip"
+        "USBDeview" = "https://www.nirsoft.net/utils/usbdeview-x64.zip"
+        "TurnedOnTimesView" = "https://www.nirsoft.net/utils/turnedontimesview.zip"
+        "RegScanner" = "https://www.nirsoft.net/utils/regscanner-x64.zip"
+        "BrowserDownloadsView" = "https://www.nirsoft.net/utils/browserdownloadsview-x64.zip"
+        "Clipboardic" = "https://www.nirsoft.net/utils/clipboardic.zip"
+        "DriverView" = "https://www.nirsoft.net/utils/driverview-x64.zip"
+        "FileAccessErrorView" = "https://www.nirsoft.net/utils/fileaccesserrorview-x64.zip"
+        "PreviousFilesRecovery" = "https://www.nirsoft.net/utils/previousfilesrecovery-x64.zip"
+        "RecentFilesView" = "https://www.nirsoft.net/utils/recentfilesview.zip"
+        "ShellBagsView" = "https://www.nirsoft.net/utils/shellbagsview.zip"
+        "TaskSchedulerView" = "https://www.nirsoft.net/utils/taskschedulerview-x64.zip"
+        "UninstallView" = "https://www.nirsoft.net/utils/uninstallview-x64.zip"
+        "USBDriveLog" = "https://www.nirsoft.net/utils/usbdrivelog.zip"
     }
-    "3" = @{
-        Name = "Spok's Tools"
-        URLs = @(
-            "https://github.com/spokwn/JournalTrace/releases/latest/download/JournalTrace.exe",
-            "https://github.com/spokwn/PathsParser/releases/latest/download/PathsParser.exe",
-            "https://github.com/spokwn/BAM-parser/releases/latest/download/BAMParser.exe",
-            "https://github.com/spokwn/prefetch-parser/releases/latest/download/PrefetchParser.exe",
-            "https://github.com/spokwn/pcasvc-executed/releases/download/v0.8.7/PcaSvcExecuted.exe",
-            "https://github.com/spokwn/ActivitiesCache-execution/releases/download/v0.6.5/ActivitiesCacheParser.exe",
-            "https://github.com/spokwn/Replaceparser/releases/latest/download/Replaceparser.exe",
-            "https://github.com/spokwn/BamDeletedKeys/releases/latest/download/BamDeletedKeys.exe",
-            "https://github.com/spokwn/Tool/releases/latest/download/espouken.exe"
-        )
+    "Spok's Tools" = [ordered]@{
+        "JournalTrace" = "https://github.com/spokwn/JournalTrace/releases/latest/download/JournalTrace.exe"
+        "PathsParser" = "https://github.com/spokwn/PathsParser/releases/latest/download/PathsParser.exe"
+        "BAM-parser" = "https://github.com/spokwn/BAM-parser/releases/latest/download/BAMParser.exe"
+        "PrefetchParser" = "https://github.com/spokwn/prefetch-parser/releases/latest/download/PrefetchParser.exe"
+        "PcaSvcExecuted" = "https://github.com/spokwn/pcasvc-executed/releases/download/v0.8.7/PcaSvcExecuted.exe"
+        "ActivitiesCacheParser" = "https://github.com/spokwn/ActivitiesCache-execution/releases/download/v0.6.5/ActivitiesCacheParser.exe"
+        "Replaceparser" = "https://github.com/spokwn/Replaceparser/releases/latest/download/Replaceparser.exe"
+        "BamDeletedKeys" = "https://github.com/spokwn/BamDeletedKeys/releases/latest/download/BamDeletedKeys.exe"
+        "espouken" = "https://github.com/spokwn/Tool/releases/latest/download/espouken.exe"
     }
-    "4" = @{
-        Name = "Other Tools"
-        URLs = @(
-            "https://github.com/winsiderss/si-builds/releases/download/3.2.25275.112/systeminformer-build-canary-setup.exe",
-            "https://www.voidtools.com/Everything-1.4.1.1029.x64-Setup.exe",
-            "https://d1kpmuwb7gvu1i.cloudfront.net/AccessData_FTK_Imager_4.7.1.exe",
-            "https://download.ccleaner.com/rcsetup154.exe",
-            "https://github.com/horsicq/DIE-engine/releases/download/3.10/die_win64_portable_3.10_x64.zip",
-            "https://mh-nexus.de/downloads/HxDPortableSetup.zip",
-            "https://www.winitor.com/tools/pestudio/current/pestudio.zip",
-            "https://download.sysinternals.com/files/Strings.zip",
-            "https://github.com/deathmarine/Luyten/releases/download/v0.5.4_Rebuilt_with_Latest_depenencies/luyten-0.5.4.jar",
-            "https://github.com/Col-E/Recaf/releases/download/2.21.14/recaf-2.21.14-J8-jar-with-dependencies.jar",
-            "https://download.sysinternals.com/files/ProcessExplorer.zip",
-            "https://download.sysinternals.com/files/Autoruns.zip",
-            "https://download.sysinternals.com/files/ProcessMonitor.zip",
-            "https://download.sysinternals.com/files/TCPView.zip",
-            "https://github.com/Yamato-Security/hayabusa/releases/download/v3.7.0/hayabusa-3.7.0-win-aarch64.zip"
-        )
+    "Other Tools" = [ordered]@{
+        "SystemInformer (Canary)" = "https://github.com/winsiderss/si-builds/releases/download/3.2.25275.112/systeminformer-build-canary-setup.exe"
+        "Everything Search" = "https://www.voidtools.com/Everything-1.4.1.1029.x64-Setup.exe"
+        "FTK Imager" = "https://d1kpmuwb7gvu1i.cloudfront.net/AccessData_FTK_Imager_4.7.1.exe"
+        "CCleaner" = "https://download.ccleaner.com/rcsetup154.exe"
+        "DIE-engine" = "https://github.com/horsicq/DIE-engine/releases/download/3.10/die_win64_portable_3.10_x64.zip"
+        "HxD Portable" = "https://mh-nexus.de/downloads/HxDPortableSetup.zip"
+        "PEStudio" = "https://www.winitor.com/tools/pestudio/current/pestudio.zip"
+        "Sysinternals Strings" = "https://download.sysinternals.com/files/Strings.zip"
+        "Luyten" = "https://github.com/deathmarine/Luyten/releases/download/v0.5.4_Rebuilt_with_Latest_depenencies/luyten-0.5.4.jar"
+        "Recaf" = "https://github.com/Col-E/Recaf/releases/download/2.21.14/recaf-2.21.14-J8-jar-with-dependencies.jar"
+        "Process Explorer" = "https://download.sysinternals.com/files/ProcessExplorer.zip"
+        "Autoruns" = "https://download.sysinternals.com/files/Autoruns.zip"
+        "Process Monitor" = "https://download.sysinternals.com/files/ProcessMonitor.zip"
+        "TCPView" = "https://download.sysinternals.com/files/TCPView.zip"
+        "Hayabusa" = "https://github.com/Yamato-Security/hayabusa/releases/download/v3.7.0/hayabusa-3.7.0-win-aarch64.zip"
     }
 }
 
-# --- GUI: Finestra di selezione dei tool ---
-Write-Host "  [*] Apertura finestra di selezione strumenti..." -ForegroundColor Blue
-$gridData = $toolCategories.GetEnumerator() | Sort-Object Name | ForEach-Object {
-    [PSCustomObject]@{
-        "ID" = $_.Key
-        "Categoria Tool" = $_.Value.Name
-        "Numero File" = $_.Value.URLs.Count
-    }
-}
-
-[System.Windows.Forms.MessageBox]::Show("Si aprirà una finestra per selezionare le categorie da scaricare.`n`nTieni premuto CTRL per selezionarne più di una.", "Signal X - Avviso", [System.Windows.Forms.MessageBoxButtons]::OK, [System.Windows.Forms.MessageBoxIcon]::Information) | Out-Null
-
-$userSelection = $gridData | Out-GridView -Title "SIGNAL X DOWNLOADER - Seleziona i Tools (Tieni premuto CTRL per scelta multipla)" -PassThru
-
-$downloadList = @()
-foreach ($choice in $userSelection) {
-    if ($toolCategories.ContainsKey($choice.ID)) {
-        $downloadList += $toolCategories[$choice.ID].URLs
-    }
-}
-
-if ($downloadList.Count -eq 0) {
-    Write-Host ""
-    Write-Host "  [!] Nessuna selezione valida effettuata o finestra chiusa. Uscita in corso..." -ForegroundColor Red
-    Write-Host ""
-    Start-Sleep 3
-    exit
-}
-
-$total = $downloadList.Count
-$counter = 0
-$successCount = 0
-
-Write-Host ""
-Write-Host -ForegroundColor DarkMagenta "  ============================================================================"
-Write-Host -ForegroundColor Blue        "                           DOWNLOADING FILES                                 " 
-Write-Host -ForegroundColor DarkMagenta "  ============================================================================"
-Write-Host ""
-Write-Host "  Total files to download: " -ForegroundColor White -NoNewline
-Write-Host "$total" -ForegroundColor DarkMagenta
-Write-Host ""
-
-foreach ($url in $downloadList) {
-    $counter++
+# ==============================================================================
+# 3. FUNZIONE DI DOWNLOAD
+# ==============================================================================
+function Download-File {
+    param ([string]$url)
     $fileName = Split-Path $url -Leaf
-    Write-Host "  [$counter/$total] " -ForegroundColor Blue -NoNewline
-    Write-Host "$fileName" -ForegroundColor White
+    $dest = Join-Path $script:folder $fileName
     
-    if (Download-File $url) {
-        $successCount++
-    }
+    try {
+        $wc = New-Object System.Net.WebClient
+        $wc.Headers.Add("User-Agent", "Mozilla/5.0")
+        $wc.DownloadFile($url, $dest)
+        
+        if ($fileName -match '\.zip$') {
+            $outDir = Join-Path $script:folder ([IO.Path]::GetFileNameWithoutExtension($fileName))
+            if (-not (Test-Path $outDir)) {
+                [void](New-Item -Path $outDir -ItemType Directory -Force)
+            }
+            [System.IO.Compression.ZipFile]::ExtractToDirectory($dest, $outDir)
+            Remove-Item $dest -Force
+        }
+        return $true
+    } catch { return $false }
 }
 
-Write-Host ""
-Write-Host -ForegroundColor DarkMagenta "  ============================================================================"
-Write-Host -ForegroundColor Blue        "                          DOWNLOAD COMPLETE!                                 " 
-Write-Host -ForegroundColor DarkMagenta "  ============================================================================"
-Write-Host ""
-Write-Host "  Successfully downloaded: " -ForegroundColor White -NoNewline
-Write-Host "$successCount" -ForegroundColor DarkMagenta -NoNewline
-Write-Host "/" -ForegroundColor White -NoNewline
-Write-Host "$total" -ForegroundColor Blue -NoNewline
-Write-Host " files" -ForegroundColor White
-Write-Host "  Location: " -ForegroundColor White -NoNewline
-Write-Host "$folder" -ForegroundColor Blue
-Write-Host ""
-Write-Host "  Opening folder..." -ForegroundColor DarkGray
-Write-Host ""
+# ==============================================================================
+# 4. CREAZIONE DELLA GUI
+# ==============================================================================
 
-Start-Process explorer.exe $folder
+# Colori Principali
+$colorBg = [System.Drawing.Color]::FromArgb(15, 15, 15)
+$colorDarkMagenta = [System.Drawing.Color]::DarkMagenta
+$colorBlue = [System.Drawing.Color]::DeepSkyBlue
+$colorText = [System.Drawing.Color]::White
+
+# Finestra Principale
+$form = New-Object System.Windows.Forms.Form
+$form.Text = "Signal X Downloader - Made By Pieros"
+$form.Size = New-Object System.Drawing.Size(650, 500)
+$form.StartPosition = 'CenterScreen'
+$form.BackColor = $colorBg
+$form.ForeColor = $colorText
+$form.FormBorderStyle = 'FixedDialog'
+$form.MaximizeBox = $false
+
+$fontTitle = New-Object System.Drawing.Font("Consolas", 14, [System.Drawing.FontStyle]::Bold)
+$fontNormal = New-Object System.Drawing.Font("Consolas", 10)
+
+# Titolo in alto
+$lblTitle = New-Object System.Windows.Forms.Label
+$lblTitle.Text = "SIGNAL X DFIR & SCREENSHARING TOOLS"
+$lblTitle.Font = $fontTitle
+$lblTitle.ForeColor = $colorDarkMagenta
+$lblTitle.AutoSize = $false
+$lblTitle.TextAlign = 'MiddleCenter'
+$lblTitle.Dock = 'Top'
+$lblTitle.Height = 40
+$form.Controls.Add($lblTitle)
+
+$lblSub = New-Object System.Windows.Forms.Label
+$lblSub.Text = "Made by Pieros | discord.gg/XVsgKxC4MX"
+$lblSub.Font = $fontNormal
+$lblSub.ForeColor = $colorBlue
+$lblSub.AutoSize = $false
+$lblSub.TextAlign = 'MiddleCenter'
+$lblSub.Dock = 'Top'
+$lblSub.Height = 30
+$form.Controls.Add($lblSub)
+
+# Pannello TabControl per le sezioni dei tool
+$tabControl = New-Object System.Windows.Forms.TabControl
+$tabControl.Dock = 'Fill'
+$tabControl.Font = $fontNormal
+
+$script:checkedBoxesList = @()
+
+foreach ($category in $script:toolCategories.Keys) {
+    $tabPage = New-Object System.Windows.Forms.TabPage
+    $tabPage.Text = $category
+    $tabPage.BackColor = $colorBg
+
+    $clb = New-Object System.Windows.Forms.CheckedListBox
+    $clb.Dock = 'Fill'
+    $clb.BackColor = [System.Drawing.Color]::FromArgb(25, 25, 25)
+    $clb.ForeColor = $colorText
+    $clb.BorderStyle = 'None'
+    $clb.CheckOnClick = $true
+    
+    foreach ($tool in $script:toolCategories[$category].Keys) {
+        [void]$clb.Items.Add($tool)
+    }
+
+    $script:checkedBoxesList += @{ "Category" = $category; "Control" = $clb }
+    $tabPage.Controls.Add($clb)
+    $tabControl.TabPages.Add($tabPage)
+}
+
+# Pannello Inferiore
+$bottomPanel = New-Object System.Windows.Forms.Panel
+$bottomPanel.Dock = 'Bottom'
+$bottomPanel.Height = 80
+$form.Controls.Add($bottomPanel)
+$form.Controls.Add($tabControl) # Il TabControl riempirà lo spazio rimanente
+
+# Label di Status
+$script:lblStatus = New-Object System.Windows.Forms.Label
+$script:lblStatus.Text = "Status: In attesa di selezione..."
+$script:lblStatus.Font = $fontNormal
+$script:lblStatus.ForeColor = $colorBlue
+$script:lblStatus.AutoSize = $false
+$script:lblStatus.Dock = 'Top'
+$script:lblStatus.Height = 30
+$script:lblStatus.TextAlign = 'MiddleCenter'
+$bottomPanel.Controls.Add($script:lblStatus)
+
+# Bottone di Download
+$btnDownload = New-Object System.Windows.Forms.Button
+$btnDownload.Text = "SCARICA STRUMENTI SELEZIONATI"
+$btnDownload.Font = New-Object System.Drawing.Font("Consolas", 12, [System.Drawing.FontStyle]::Bold)
+$btnDownload.BackColor = $colorDarkMagenta
+$btnDownload.ForeColor = $colorText
+$btnDownload.FlatStyle = 'Flat'
+$btnDownload.Width = 350
+$btnDownload.Height = 40
+$btnDownload.Left = ($form.Width - $btnDownload.Width) / 2 - 10
+$btnDownload.Top = 35
+$bottomPanel.Controls.Add($btnDownload)
+
+# ==============================================================================
+# 5. LOGICA DEL BOTTONE DOWNLOAD
+# ==============================================================================
+$btnDownload.Add_Click({
+    $selectedUrls = @()
+    
+    # Raccogli tutti gli elementi selezionati nelle varie schede
+    foreach ($item in $script:checkedBoxesList) {
+        $catName = $item.Category
+        $box = $item.Control
+        foreach ($checkedItem in $box.CheckedItems) {
+            $url = $script:toolCategories[$catName][$checkedItem]
+            $selectedUrls += @{ "Name" = $checkedItem; "URL" = $url }
+        }
+    }
+
+    if ($selectedUrls.Count -eq 0) {
+        [System.Windows.Forms.MessageBox]::Show("Seleziona almeno un tool prima di procedere!", "Attenzione", [System.Windows.Forms.MessageBoxButtons]::OK, [System.Windows.Forms.MessageBoxIcon]::Warning)
+        return
+    }
+
+    $btnDownload.Enabled = $false
+    $total = $selectedUrls.Count
+    $current = 0
+
+    foreach ($tool in $selectedUrls) {
+        $current++
+        $script:lblStatus.Text = "Status: Scaricando $($tool.Name) [$current/$total]..."
+        [System.Windows.Forms.Application]::DoEvents() # Aggiorna la UI
+        
+        Download-File -url $tool.URL
+    }
+
+    $script:lblStatus.Text = "Status: Download Completato!"
+    $script:lblStatus.ForeColor = [System.Drawing.Color]::LimeGreen
+    [System.Windows.Forms.Application]::DoEvents()
+
+    [System.Windows.Forms.MessageBox]::Show("Download completato con successo in:`n$script:folder", "Signal X", [System.Windows.Forms.MessageBoxButtons]::OK, [System.Windows.Forms.MessageBoxIcon]::Information)
+    Start-Process explorer.exe $script:folder
+    $form.Close()
+})
+
+# Mostra l'applicazione
+$form.ShowDialog() | Out-Null
